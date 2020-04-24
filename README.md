@@ -1,1 +1,1 @@
-# nuxt-radis-cache
+# nuxt-redis-cache
