@@ -8,13 +8,13 @@ export default ({$axios}, inject) => {
   if (!$axios) return;
 
   $axios.$_get = $axios.$get;
-  $axios.$get = async (url, config) => {
-    console.log(config)
+  $axios.$get = async (url, config) =>{
     if (config && config.cache) {
       let cacheKey = '';
       try {
         cacheKey = `${prefix}:${url}${JSON.stringify(config.params)}`
       } catch (e) {
+        console.error('cacheKey parse error', e)
       }
 
       if (cacheKey && await cache.exists(cacheKey)) {

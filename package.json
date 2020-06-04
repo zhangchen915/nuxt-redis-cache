@@ -11,6 +11,7 @@
     "access": "public"
   },
   "dependencies": {
-    "ioredis": "^4.16.3"
+    "ioredis": "^4.16.3",
+    "zookeeper-cluster-client": "^3.1.0"
   }
 }
