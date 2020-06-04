@@ -1,24 +1,92 @@
 const path = require('path');
-const Cache = require('./redisCache');
+const Cache = require('./cache');
 
-module.exports = function nuxtComponentCache(options) {
-    if (this.options.render.ssr === false) return;
+function cleanIfNewVersion(cache, version, prefix) {
+  if (!version) return;
+  return cache.redis.get(`${prefix}:version`)
+    .then(oldVersion => {
+      console.log(oldVersion)
+      if (!oldVersion || oldVersion == version) return;
+      console.log(`Cache has updated from ${oldVersion} to ${version}`);
+      return cache.clean();
+    });
+}
 
-    //TODO remove cache when restart
+function tryStoreVersion(cache, version, prefix) {
+  if (!version || cache.versionSaved) return;
+  return cache.redis.set(`${prefix}:version`, version)
+    .then(() => cache.versionSaved = true);
+}
 
-    this.addPlugin({
-      src: path.resolve(__dirname, 'plugin.js'),
-      fileName: 'cache.js',
-      mode: 'server',
-      options
-    })
+module.exports = async function (options) {
+  const {render} = this.options
+  //|| process.env.NODE_ENV !== 'production'
+  if (render.ssr === false) return;
+  const {version = '', pages, isCacheable, prefix = '', usePathName = true, cleanOldVersion} = options
+  const cache = await Cache(options)
+  this.addPlugin({
+    src: path.resolve(__dirname, 'plugin.js'),
+    fileName: 'cache.js',
+    mode: 'server',
+    options
+  })
 
-    if (typeof this.options.render.bundleRenderer !== 'object' || this.options.render.bundleRenderer === null)
-        this.options.render.bundleRenderer = {}
+  if (typeof render.bundleRenderer !== 'object' || render.bundleRenderer === null)
+    render.bundleRenderer = {}
 
-    // Disable if cache explicitly provided in project
-    if (this.options.render.bundleRenderer.cache) return;
-    this.options.render.bundleRenderer.cache = Cache(options)
+  // Disable if cache explicitly provided in project
+  if (!render.bundleRenderer.cache) render.bundleRenderer.cache = cache
+  if (!Array.isArray(pages) || !pages.length || !this.nuxt.renderer) return;
+
+  function isCacheFriendly(path, context) {
+    if (typeof (isCacheable) === 'function') return isCacheable(path, context);
+    return !context.res.spa && pages.some(pat =>
+      pat instanceof RegExp
+        ? pat.test(path)
+        : path.startsWith(pat)
+    );
+  }
+
+  function cacheKeyBuilder(route, context) {
+    const {headers = {}, url, _parsedUrl} = context.req
+    const realUrl = headers.host + url;
+    if (!realUrl) return;
+    const cacheKey = usePathName && realUrl
+      ? _parsedUrl.pathname
+      : realUrl;
+
+    if (isCacheFriendly(cacheKey, context)) return cacheKey;
+  }
+
+  if(cleanOldVersion) cleanIfNewVersion(cache, version, prefix);
+
+  const renderer = this.nuxt.renderer;
+  const renderRoute = renderer.renderRoute.bind(renderer);
+  renderer.renderRoute = function (route, context) {
+    // hopefully cache reset is finished up to this point.
+    if(cleanOldVersion) tryStoreVersion(cache, version, prefix);
+
+    const cacheKey = cacheKeyBuilder(route, context);
+    if (!cacheKey) return renderRoute(route, context);
+
+    function renderSetCache() {
+      return renderRoute(route, context)
+        .then(result => {
+          if (!result.error) cache.set(cacheKey, JSON.stringify(result));
+          return result;
+        });
+    }
+
+    return cache.get(cacheKey)
+      .then(cachedResult => {
+        if (cachedResult) return JSON.parse(cachedResult);
+
+        return renderSetCache();
+      })
+      .catch(renderSetCache);
+  };
+
+  return cache;
 }
 
 module.exports.meta = require('../package.json')
