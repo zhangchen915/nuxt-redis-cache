@@ -1,11 +1,11 @@
 const Redis = require("ioredis");
 const options = <%= JSON.stringify(options) %>;
 
-const {redisOptions, prefix = ''} = options;
-const cache = new Redis(redisOptions);
+const {prefix = ''} = options;
 
-export default ({$axios}, inject) => {
-  if (!$axios) return;
+export default ({app, $axios}, inject) => {
+  const cache = app.context.ssrContext.__redisCache
+  if (!$axios || !cache) return;
 
   $axios.$_get = $axios.$get;
   $axios.$get = async (url, config) =>{
@@ -17,7 +17,7 @@ export default ({$axios}, inject) => {
         console.error('cacheKey parse error', e)
       }
 
-      if (cacheKey && await cache.exists(cacheKey)) {
+      if (cacheKey && await cache.has(cacheKey)) {
         return cache.get(cacheKey).then(res => {
           try {
             return JSON.parse(res)
