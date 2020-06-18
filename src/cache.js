@@ -2,7 +2,7 @@ const Redis = require("ioredis");
 const Codis = require("./codis")
 
 module.exports = async function (options) {
-  const {prefix = '', redisOptions, cacheTime = 1360, codisOptions, version = ''} = options;
+  const {prefix = '', redisOptions, cacheTime = 60, codisOptions, version = ''} = options;
   let redis
 
   if (codisOptions) {

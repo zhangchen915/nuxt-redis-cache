@@ -21,8 +21,7 @@ function tryStoreVersion(cache, version, prefix) {
 
 module.exports = async function (options) {
   const {render} = this.options
-  //|| process.env.NODE_ENV !== 'production'
-  if (render.ssr === false) return;
+  if (render.ssr === false || process.env.NODE_ENV !== 'production') return;
   const {version = '', pages, isCacheable, prefix = '', usePathName = true, componentCache =false, cleanOldVersion} = options
   const cache = await Cache(options)
   const lruCache = new LRU(options)
