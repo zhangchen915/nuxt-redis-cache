@@ -21,11 +21,19 @@ function tryStoreVersion(cache, version, prefix) {
 
 module.exports = async function (options) {
   const {render} = this.options
-  if (render.ssr === false || process.env.NODE_ENV !== 'production') return;
-  const {version = '', pages, isCacheable, prefix = '', usePathName = true, componentCache =false, cleanOldVersion} = options
-  const cache = await Cache(options)
+  const {renderer} = this.nuxt
+  if (render.ssr === false || process.env.NODE_ENV !== 'production' || !renderer) return;
+  const {version = '', pages, isCacheable, prefix = '', usePathName = true, componentCache = false, cleanOldVersion} = options
+
+  let cache
+  try {
+    cache = await Cache(options)
+  }catch (e) {
+    console.log(e)
+  }
   const lruCache = new LRU(options)
 
+  if (!cache) return
   this.addPlugin({
     src: path.resolve(__dirname, 'plugin.js'),
     fileName: 'nuxt-cache.js',
@@ -33,7 +41,7 @@ module.exports = async function (options) {
     options
   })
 
-  if(componentCache && componentCache > 0){
+  if (componentCache && componentCache > 0) {
     if (typeof render.bundleRenderer !== 'object' || render.bundleRenderer === null)
       render.bundleRenderer = {}
 
@@ -42,12 +50,11 @@ module.exports = async function (options) {
   }
 
 
-  if(cleanOldVersion) cleanIfNewVersion(cache, version, prefix);
+  if (cleanOldVersion) cleanIfNewVersion(cache, version, prefix);
 
-  const renderer = this.nuxt.renderer;
   const renderRoute = renderer.renderRoute.bind(renderer);
   renderer.renderRoute = function (route, context) {
-    context.__redisCache= cache
+    context.__redisCache = cache
 
     if (!Array.isArray(pages) || !pages.length || !renderer) return renderRoute(route, context);
 
@@ -71,7 +78,7 @@ module.exports = async function (options) {
       if (isCacheFriendly(cacheKey, context)) return cacheKey;
     }
     // hopefully cache reset is finished up to this point.
-    if(cleanOldVersion) tryStoreVersion(cache, version, prefix);
+    if (cleanOldVersion) tryStoreVersion(cache, version, prefix);
 
     const cacheKey = cacheKeyBuilder(route, context);
     return renderRoute(route, context)

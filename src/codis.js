@@ -16,7 +16,7 @@ class Codis extends EventEmitter {
     this._initFromZK()
   }
 
-  _getConnectInfo = addr => {
+  _getConnectInfo(addr) {
     if (typeof addr !== 'string' || addr.indexOf(':') < 0) return
     const [host, port] = addr.split(':')
     return {host, port}
