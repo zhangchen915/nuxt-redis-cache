@@ -8,12 +8,11 @@ module.exports = async function (options) {
   if (codisOptions) {
     redis = await new Promise((resolve, reject) => {
       const codis = new Codis(codisOptions)
-      codis.on('ready', client => resolve(client))
+      codis.on('ready', client => {
+        console.error('Codis connected!')
+        resolve(client)
+      })
       codis.on('error', () => resolve(false))
-      setTimeout(() => {
-        console.error('Codis connect time out!')
-        resolve(false)
-      }, 5000)
     })
   } else if(redisOptions) {
     redis = new Redis(redisOptions);

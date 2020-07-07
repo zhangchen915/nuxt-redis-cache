@@ -4,39 +4,47 @@ const options = <%= JSON.stringify(options) %>;
 const {prefix = ''} = options;
 
 export default ({app, $axios}, inject) => {
-  const cache = app.context.ssrContext.__redisCache
-  if (!$axios || !cache) return;
+  const redisCache = app.context.ssrContext.__redisCache
+  if (!$axios || !redisCache) return;
 
   $axios.$_get = $axios.$get;
   $axios.$get = async (url, config) =>{
-    if (config && config.cache) {
-      let cacheKey = '';
+    const {cache, params} = config || {}
+    let cacheKey = '';
+    let ttl = isNaN(cache) ? cache : 60
+    if (typeof cache === 'function') {
       try {
-        cacheKey = `${prefix}:${url}${JSON.stringify(config.params)}`
+         const {key, cacheTime} = cache(config)
+         cacheKey = key
+         ttl = cacheTime
+      } catch (e) {
+        console.error(e)
+      }
+    }else{
+      try {
+        cacheKey = `${prefix}:${url}${JSON.stringify(params)}`
       } catch (e) {
         console.error('cacheKey parse error', e)
       }
+    }
 
-      if (cacheKey && await cache.has(cacheKey)) {
-        return cache.get(cacheKey).then(res => {
-          try {
-            return JSON.parse(res)
-          } catch (e) {
-            return {}
-          }
-        });
-      } else {
-        return $axios.$_get(url, config).then(res => {
-          try {
-            cache.set(cacheKey, JSON.stringify(res), 'EX', isNaN(config.cache) ? config.cache : 60)
-          } catch (e) {
-          }
-          return res
-        })
-      }
-
+    if(!cache || !cacheKey) return $axios.$_get(url, config)
+    if (await redisCache.has(cacheKey)) {
+      return redisCache.get(cacheKey).then(res => {
+        try {
+          return JSON.parse(res)
+        } catch (e) {
+          return {}
+        }
+      });
     } else {
-      return $axios.$_get(url, config)
+      return $axios.$_get(url, config).then(res => {
+        try {
+          redisCache.set(cacheKey, JSON.stringify(res), 'EX', ttl)
+        } catch (e) {
+        }
+        return res
+      })
     }
   }
 }

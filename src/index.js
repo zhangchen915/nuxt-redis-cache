@@ -81,11 +81,19 @@ module.exports = async function (options) {
     if (cleanOldVersion) tryStoreVersion(cache, version, prefix);
 
     const cacheKey = cacheKeyBuilder(route, context);
-    return renderRoute(route, context)
-      .then(result => {
-        if (!result.error && cacheKey) cache.set(cacheKey, JSON.stringify(result));
-        return result;
-      });
+
+    function renderSetCache(){
+      return renderRoute(route, context)
+        .then(result => {
+          if (!result.error && cacheKey) cache.set(cacheKey, JSON.stringify(result));
+          return result;
+        });
+    }
+
+    return cache.get(cacheKey).then(res => {
+      if (res) return JSON.parse(res)
+      return renderSetCache()
+    }).catch(renderSetCache)
   };
 
   return cache;
